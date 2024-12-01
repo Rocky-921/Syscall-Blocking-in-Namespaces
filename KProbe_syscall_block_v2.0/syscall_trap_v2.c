@@ -1,8 +1,6 @@
-#include <linux/fs.h>
 #include <linux/kernel.h>
 #include <linux/kprobes.h>
 #include <linux/module.h>
-#include <linux/net_namespace.h>
 #include <linux/nsproxy.h>
 #include <linux/panic.h>
 #include <linux/pid_namespace.h>
@@ -46,8 +44,8 @@ static int handler_pre(struct kprobe *p, struct pt_regs *regs) {
     printk(KERN_INFO "The current instruction pointer: %lx\n", regs->ip);
     printk(KERN_INFO "The currnt code segment: %lx\n", regs->cs);
     // TARGET_PID_NAMESPACE is an array of inum of the PID namespaces for which the "SYSCALL" syscall is to be blocked
-    int TARGET_PID_NAMESPACE[] = {12345}; // Append entries here
-    for (int i=0; i<PID_QSIZE; ++i) {
+    int TARGET_PID_NAMESPACE[] = {12345};  // Append entries here
+    for (int i = 0; i < PID_QSIZE; ++i) {
         // Check if the current process is in the target PID namespace
         // current is a macro that points to the task_struct of the current process
         // #define current (get_current())
@@ -61,19 +59,17 @@ static int handler_pre(struct kprobe *p, struct pt_regs *regs) {
          | To use other namespaces, the following can be used:                                                                          |
          | current->nsproxy->{cgroup_ns, ipc_ns, mnt_ns, net_ns, uts_ns}->ns.inum can be compared with the target namespace inum        |
          ********************************************************************************************************************************/
-        
+
         // If the current process is in the target PID namespace, then block the "SYSCALL" syscall
         // task_active_pid_ns(current) returns task_struct of the current process which contains info about the PID namespace of the current process
-        if(task_active_pid_ns(current)->ns.inum == TARGET_PID_NAMESPACE[i]) {
-
-            //if root then don't block
-            if(current_uid().val == 0) {
+        if (task_active_pid_ns(current)->ns.inum == TARGET_PID_NAMESPACE[i]) {
+            // if root then don't block
+            if (current_uid().val == 0) {
                 printk(KERN_INFO "Root user detected, not blocking SYSCALL syscall\n");
                 return 0;
             }
 
             printk(KERN_INFO "Blocked SYSCALL syscall for task in PID namespace: %u\n", task_active_pid_ns(current)->ns.inum);
-
 
             /***************************************************************************************************************************************
              * Below we edit the registers values to block the syscall.                                                                            *
@@ -88,7 +84,6 @@ static int handler_pre(struct kprobe *p, struct pt_regs *regs) {
             regs->dx = 0;
             regs->si = 0;
             regs->di = 0;
-
         }
     }
     return 0;
@@ -96,21 +91,21 @@ static int handler_pre(struct kprobe *p, struct pt_regs *regs) {
 
 static int __init kprobe_init(void) {
     int ret;
-    ret = register_kprobe(&kp); // registering kprobe module
-    if (ret < 0) { // checking if kprobe is registered successfully
+    ret = register_kprobe(&kp);  // registering kprobe module
+    if (ret < 0) {               // checking if kprobe is registered successfully
         printk(KERN_ERR "Failed to register kprobe: %d\n", ret);
         return ret;
     }
-    kp.pre_handler = handler_pre; // setting pre_handler for kprobe
+    kp.pre_handler = handler_pre;  // setting pre_handler for kprobe
     // pre_handler -> handler function to be called before the function is executed
     printk(KERN_INFO "Kprobe registered for __x64_sys_SYSCALL\n");
     return 0;
 }
 
 static void __exit kprobe_exit(void) {
-    unregister_kprobe(&kp); // unregistering kprobe module
+    unregister_kprobe(&kp);  // unregistering kprobe module
     printk(KERN_INFO "Kprobe unregistered for __x64_sys_SYSCALL\n");
 }
 
-module_init(kprobe_init); // modult_init -> macro to define the function to be called when the module is loaded
-module_exit(kprobe_exit); // module_exit -> macro to define the function to be called when the module is unloaded
+module_init(kprobe_init);  // modult_init -> macro to define the function to be called when the module is loaded
+module_exit(kprobe_exit);  // module_exit -> macro to define the function to be called when the module is unloaded
